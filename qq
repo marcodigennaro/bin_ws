@@ -1,0 +1,88 @@
+#/usr/bin/sh
+
+if [ -z "$1" ]; then
+  user=`whoami`
+else
+  user=$1
+fi
+
+echo $user
+
+list_of_jobs=`squeue -u $user  -o "%.8i %.9P %.8T %.10M %.9l %.6D %j %R %Y"`
+pen_hiq=`     squeue -u $user  -o "%.8i %.9P %.8T %.10M %.9l %.6D %j %R %Y"|grep "PENDING" | grep "nodeshiq" | wc -l`
+pen_loq=`     squeue -u $user  -o "%.8i %.9P %.8T %.10M %.9l %.6D %j %R %Y"|grep "PENDING" | grep "nodesloq" | wc -l`
+run_hiq=`     squeue -u $user  -o "%.8i %.9P %.8T %.10M %.9l %.6D %j %R %Y"|grep "RUNNING" | grep "nodeshiq" | wc -l`
+run_loq=`     squeue -u $user  -o "%.8i %.9P %.8T %.10M %.9l %.6D %j %R %Y"|grep "RUNNING" | grep "nodesloq" | wc -l`
+run_gpu=`     squeue -u $user  -o "%.8i %.9P %.8T %.10M %.9l %.6D %j %R %Y"|grep "RUNNING" | grep "gpu" | wc -l`
+
+echo "list of jobs:"
+echo "$list_of_jobs" | sed 's/(Resources)//g; s/(Priority)//g; s/365-00:00:00      /      365      /g'
+all_jobs=`echo "$list_of_jobs" | wc -l `
+echo "================================="
+echo `date`
+echo "Total running = $(( $all_jobs - 1 ))"
+
+tot_hiq=$(( $pen_hiq + $run_hiq ))
+tot_loq=$(( $pen_loq + $run_loq ))
+tot_pen=$(( $pen_hiq + $pen_loq ))
+tot_run=$(( $run_hiq + $run_loq ))
+
+echo "---------------------------------"
+echo "      PENDING | RUNNING | TOTAL"
+printf 'hiq      %04d |    %04d |  %04d \n' $pen_hiq $run_hiq $tot_hiq
+printf 'loq      %04d |    %04d |  %04d \n' $pen_loq $run_loq $tot_loq
+printf 'gpu           |    %04d |  %04d \n'          $run_gpu $run_gpu
+printf 'tot      %04d |    %04d |  %04d \n' $tot_pen $(( $run_gpu + $tot_run )) $(( $tot_hiq + $tot_loq + $run_gpu ))
+echo "---------------------------------"
+
+#echo "      PENDING | RUNNING | TOTAL"
+#printf 'hiq      %04d |    %04d |  %04d \n' $pen_hiq $run_hiq $tot_hiq
+#printf 'loq      %04d |    %04d |  %04d \n' $pen_loq $run_loq $tot_loq
+#printf 'tot      %04d |    %04d |  %04d \n' $tot_pen $tot_run $(( $all_jobs -1 ))
+
+### PER NODES
+#for node in 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015; do
+#  run_node=`squeue | grep node${node} | wc -l`
+#  printf 'node%s  %01d jobs running \n'  $node $run_node
+#  done
+
+
+#cpu01=`squeue | grep node001 | wc -l`
+#cpu02=`squeue | grep node002 | wc -l`
+#cpu03=`squeue | grep node003 | wc -l`
+#cpu04=`squeue | grep node004 | wc -l`
+#cpu05=`squeue | grep node005 | wc -l`
+#cpu06=`squeue | grep node006 | wc -l`
+#cpu07=`squeue | grep node007 | wc -l`
+#cpu08=`squeue | grep node008 | wc -l`
+#cpu09=`squeue | grep node009 | wc -l`
+#cpu10=`squeue | grep node010 | wc -l`
+#cpu11=`squeue | grep node011 | wc -l`
+#cpu12=`squeue | grep node012 | wc -l`
+#cpu13=`squeue | grep node013 | wc -l`
+#cpu14=`squeue | grep node014 | wc -l`
+#cpu15=`squeue | grep node015 | wc -l`
+#
+#gpu01=`squeue | grep gpu001 | wc -l`
+#gpu02=`squeue | grep gpu002 | wc -l`
+#gpu03=`squeue | grep gpu003 | wc -l`
+#gpu04=`squeue | grep gpu004 | wc -l`
+#gpu05=`squeue | grep gpu005 | wc -l`
+#gpu06=`squeue | grep gpu006 | wc -l`
+#gpu07=`squeue | grep gpu007 | wc -l`
+#gpu08=`squeue | grep gpu008 | wc -l`
+#gpu09=`squeue | grep gpu009 | wc -l`
+#gpu10=`squeue | grep gpu010 | wc -l`
+#gpu11=`squeue | grep gpu011 | wc -l`
+#gpu12=`squeue | grep gpu012 | wc -l`
+#gpu13=`squeue | grep gpu013 | wc -l`
+#gpu14=`squeue | grep gpu014 | wc -l`
+#gpu15=`squeue | grep gpu015 | wc -l`
+#
+#
+#printf 'CPU node 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015\n'
+#printf 'running  %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d\n' ${cpu01} ${cpu02} ${cpu03} ${cpu04} ${cpu05} ${cpu06} ${cpu07} ${cpu08} ${cpu09} ${cpu10} ${cpu11} ${cpu12} ${cpu13} ${cpu14} ${cpu15}
+#printf 'GPU node 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015\n'
+#printf 'running  %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d %3d\n' ${gpu01} ${gpu02} ${gpu03} ${gpu04} ${gpu05} ${gpu06} ${gpu07} ${gpu08} ${gpu09} ${gpu10} ${gpu11} ${gpu12} ${gpu13} ${gpu14} ${gpu15}
+
+echo "================================="

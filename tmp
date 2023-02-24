@@ -1,0 +1,28 @@
+
+cp /cluster_homes/mdi0316/bin/all_enospc_logs                           . 
+cp /cluster_homes/mdi0316/bin/all_log                           . 
+cp /cluster_homes/mdi0316/bin/cart_to_zmat.py                           . 
+cp /cluster_homes/mdi0316/bin/clean_cluster                           . 
+cp /cluster_homes/mdi0316/bin/clean_semaphores.sh                           . 
+cp /cluster_homes/mdi0316/bin/clear_easy_files                           . 
+cp /cluster_homes/mdi0316/bin/delete_all_ENOSPC_errors.sh                           . 
+cp /cluster_homes/mdi0316/bin/delete_jobs.sh                           . 
+cp /cluster_homes/mdi0316/bin/find_all_dirs_with_N_files.sh                           . 
+cp /cluster_homes/mdi0316/bin/gms_extract_key_from_json.py
+cp /cluster_homes/mdi0316/bin/initialize_mono_dict.py                           . 
+cp /cluster_homes/mdi0316/bin/qcount.sh                           . 
+cp /cluster_homes/mdi0316/bin/qq                           .                            . 
+cp /cluster_homes/mdi0316/bin/qq_loop                           . 
+cp /cluster_homes/mdi0316/bin/remove_folder_by_input_name.sh                           . 
+cp /cluster_homes/mdi0316/bin/resubmit_from_list_of_dir.sh                           . 
+cp /cluster_homes/mdi0316/bin/resubmit_from_location.sh                           . 
+cp /cluster_homes/mdi0316/bin/rm_all_empty_dirs.sh                           . 
+cp /cluster_homes/mdi0316/bin/rm_easy_files                           . 
+cp /cluster_homes/mdi0316/bin/rm_semaphores.sh                           . 
+cp /cluster_homes/mdi0316/bin/run_all_dimers.sh                           . 
+cp /cluster_homes/mdi0316/bin/run_all_monomers.sh                           . 
+cp /cluster_homes/mdi0316/bin/run_all_optimizations.sh                           . 
+cp /cluster_homes/mdi0316/bin/rungms                           . 
+cp /cluster_homes/mdi0316/bin/rungms_local                           . 
+cp /cluster_homes/mdi0316/bin/rungms_scratch                           . 
+cp /cluster_homes/mdi0316/bin/SAPT                           . 

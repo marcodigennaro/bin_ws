@@ -1,0 +1,1401 @@
+#!/bin/bash
+#
+# $Id: SAPT 808 2012-12-04 08:49:31Z cencek $
+#
+###############################################################################
+###############################################################################
+##                                                                           ##
+##            Symmetry Adapted Perturbation Theory Unix Exec file            ##
+##            ===================================================            ##
+##                sequential versions of Gamess and SAPT
+##                                                                           ##
+###############################################################################
+###############################################################################
+# Typical submit line:
+#                 do scf CP calcs --v
+#    nohup time nice -20 SAPT name scfcp >output_file 2>&1 &
+#                               ^-- job name
+# In particular:
+#    SAPT (no parameters)
+# echos info about parameters.  Only the first parameter is required.
+#
+# Input files for Atmol MC+BS runs:
+#   nameMA.intinp -- input for monomer A integral calcs (compute 2-el) in MC+BS
+#        B                             B                                  MC+BS
+#   name.intinp   -- intput for dimer                                     DC+BS
+#   nameA.intinp  --            monomer A               (BYPASS TWO)      DC+BS
+#                                   if dimer calc. performed --^
+#   nameB.intinp  --                    B               (BYPASS TWO)      DC+BS
+#   nameMA.scfinp -- input for scf of monomer A,  BS size is that of MC+BS for A
+#        B                                    B                                B
+#   name.scfinp   --                  dimer in DC+BS
+#   nameA.scfinp  --                  mono A
+#       B                                  B
+#   nameP.data    -- input for tran/cc/sapt.x
+#  Input files for GAMESS DCBS runs:
+#   name.inp   -- intput for dimer scf                
+#   nameA.inp  --            monomer A               
+#   nameB.inp  --                    B              
+#   nameP.data    -- input for tran/cc/sapt.x
+#  Input files for Dalton
+#   name[A,MA,B,MB].dal - main input files
+#   name[A,MA,B,MB].mol - molecule description and basis set information
+###############################################################################
+
+
+##############  Functions used in script  #########################
+runscf ()
+{
+       case "$SCFPROG"
+          in
+            atmol)
+               if [ -f ED3 ]
+                  then
+                    rm ED3
+               fi ;
+               if [ -f ED7 ]
+                  then
+                    rm ED7
+               fi ;
+               if [ ! -f $I1'.intinp' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.intinp' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               if [ ! -f $I1'.scfinp' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.scfinp' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               time $ATMOLDIR/integw < $I1'.intinp' ;
+               time $ATMOLDIR/scf    < $I1'.scfinp'  ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $INTERDIR/atmolintf < interface.input
+               fi ;
+               if [ $RMINTFILE = 'YES' ]
+                  then
+                     rm MT3
+               fi ;;
+            atmol1024)
+               if [ -f ED3 ]
+                  then
+                    rm ED3
+               fi ;
+               if [ -f ED7 ]
+                  then
+                    rm ED7
+               fi ;
+               if [ ! -f $I1'.intinp' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.intinp' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               if [ ! -f $I1'.scfinp' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.scfinp' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               time $ATMNEWDIR/integw < $I1'.intinp' ;
+               time $ATMNEWDIR/scf    < $I1'.scfinp'  ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $INTERDIR/atm1024intf < interface.input
+               fi ;
+               if [ $RMINTFILE = 'YES' ]
+                  then
+                     rm MT3
+               fi ;;
+            g94)
+               if [ ! -f $I1'.data' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.data' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               time g94 < $I1'.data'  ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $SAPTDIR/g94intf < interface.input
+               fi ;
+               rm rwf.rwf ;
+               if [ $RMINTFILE = 'YES' ]
+                  then
+                     rm inta.data
+                  else
+                     mv int.int inta.data
+               fi ;;
+            g03)
+               if [ ! -f $I1'.data' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.data' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               time $GAUEXE < $I1'.data'  ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $SAPTDIR/$GAUINTF < interface.input
+               fi ;
+               rm rwf.rwf ;
+               if [ $RMINTFILE = 'YES' ]
+                  then
+                     rm inta.data
+                  else
+                     mv int.int inta.data
+               fi ;;
+	   orca)
+               if [ ! -f $I1'.data' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.data' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+	       time $SAPTDIR/orcameta < $I1'.data'
+	       time $SAPTDIR/gamel1.gaussian < fort.7
+	       mv fort.7 basis.data
+	       mv fort.8 $I1'.inp'
+	       mv fort.9 orcavect.data
+	       echo
+	       time $ORCADIR/orca $I1'.inp' | tee $I1'.out' 
+	       echo
+	       echo "Orca->Molden interface"
+	       time $ORCADIR/orca_2mkl  $I1 -emolden
+	       time $SAPTDIR/orcavect < $I1'.molden.input'
+	       awk '/FINAL SINGLE POINT ENERGY/ {print $5}' $I1'.out' >> scfener.data ;;
+            aces2)
+               mkdir aces.$$ ;
+               cd aces.$$ ;
+               cp $GENBASDIR/GENBAS . ;
+               cp ../$I1'.zmat' ZMAT ;
+               $ACES2DIR/xaces2 ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $INTERDIR/aces2intf < interface.input
+               fi ;
+               mv info.data .. ;
+               mv vect.data .. ;
+               mv onel.data .. ;
+               mv invsqr.smat ..;
+               mv IIII ../inta.data ;
+               mv Debug.output .. ;
+               cd ..
+               rm -rf aces.$$  ;
+               if [ $RMINTFILE = 'YES' ]
+                  then
+                     rm inta.data
+               fi ;;
+            gamess)
+#             The parameters used for the runGAMESS script:
+#              $1 - job name (JOB)
+#              $2 - version number of GAMESS executable.
+#              $3 - number of NODES on which GAMESS is to be run. 
+#                   Set to 1 for seq. version
+#              $4 - scratch directory for Gamess
+#              $5 - arc (or PUNCH) directory for Gamess 
+#                   may but does not have to be different from $4)
+#              $6 - path to GAMESS executable (set in SAPT script)
+#
+              echo Starting to run runGAMESS now...
+              $GAMSDIR/runGAMESS\
+              $I1 $VERNO $NNODES $GMSCRDIR $GMARCDIR $GMSPATH > ooo 2>&1
+               cat ooo ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     grep -i 'E(RHF)' $GMARCDIR/$I1.dat > scfen.aux
+                     DICTNRY=$GMSCRDIR/$I1.DAF
+                     export DICTNRY
+                     awk -f $INTERDIR/gms_awk1 ooo > interface.input
+                     awk -f $INTERDIR/gms_awk2 ooo >> interface.input
+                     echo This is the interface.input file
+                     cat interface.input
+                     echo Starting to run gamsintf now...
+                     echo $INTERDIR/gamsintf
+                     time $INTERDIR/gamsintf < interface.input > $I1.ino 2>&1
+                     echo Finished interface
+                     rm scfen.aux
+               fi;
+                   echo Testing the NNODES value. 
+                   if [ $NNODES -ge 2 ]
+                     then
+		      mv $GMSCRDIR/inttw.data fort.1
+		      $INTERDIR/gmerge
+                      mv fort.2 inta.data
+		      rm fort.1
+                   else
+                      mv $GMSCRDIR/inttw.data inta.data
+                   fi ;
+               if [ $RMINTFILE = 'YES' ]
+                  then
+                     echo Removing the GAMESS integral file
+                     rm inta.data
+                  else
+                     echo Keeping the GAMESS integral file
+               fi ;;
+#            cadpac)
+#              echo "\nStarting $name calculation at `date`"
+#              echo "Working directory $work"
+#              cd $work ;
+#              #  Starting from scratch. Make sure that this 
+#              #  calculation hasn't been
+#              #  done already and isn't in progress
+#              if ( -e finished ) then
+#                 echo Calculation in $cwd has been finished.
+#                 echo Remove file "finished" if calculation is to be repeated.
+#                 exit
+#              else if ( -e active ) then
+#                 echo Calculation in $cwd is in progress.
+#                 exit
+#              fi ;
+#              touch active ;
+#              $saptdir/runcadpac $cflags -here $I1 ;;
+            molpro)
+
+         if (!  grep -i nosym   $I1'.molpro'  > /dev/null )
+           then
+             echo '"nosym" flag not present in input file!  '
+             exit
+           fi
+         if (!  grep -i  NelecA  $I1'.molpro'  > /dev/null )
+           then
+             echo '"NelecA" flag not set in input file!  '
+             exit
+           fi
+         if (!  grep -i NelecB  $I1'.molpro'  > /dev/null )
+           then
+             echo '"NelecB" flag not set in input file!  '
+             exit
+           fi
+         if (!  grep -i Nspin.  $I1'.molpro'  > /dev/null )
+           then
+             echo ' spin  flag not set in input file!  '
+             exit
+           fi
+         if (!  grep -i user     $I1'.molpro'  > /dev/null )
+           then
+             echo ' "user"  command  not present in input file!  '
+             exit
+           fi
+
+            cp $I1'.molpro' molpro.molpro
+            $MOLPROEXE -I $TMPDIR -W $TMPDIR  molpro.molpro ;
+           cat molpro.out
+            mv $MOLPROPATH/vecta.data . ;
+            mv $MOLPROPATH/vectb.data . ;
+
+            mv $MOLPROPATH/infoa.data . ;
+            mv $MOLPROPATH/infob.data . ;
+
+            mv $MOLPROPATH/onela.data . ;
+            mv $MOLPROPATH/onelb.data . ;
+
+#  cluster amplitudes
+#            mv $MOLPROPATH/ampa.data . ;
+#            mv $MOLPROPATH/ampb.data . ;
+
+            mv $MOLPROPATH/scfener.data . ;
+            mv $MOLPROPATH/int2e.data inta.data ;;
+
+            dalton)
+	       DALTIN='yes'
+               if [ ! -f $I1'.mol' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.mol' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               if [ ! -f $I1'.dal' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.dal' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+	       mkdir $DALTSCR/$I1/
+	       if [ -f auxil.data ]; then
+	         cp auxil.data  $DALTSCR/$I1/
+	       fi
+               time $DALTEXE -D -t $DALTSCR $I1 $I1
+	       cat $I1.out
+	       
+	       rm $I1.out
+	       rm -f $I1.tar.gz
+	       
+	       mv $DALTSCR/$I1/AOONEINT .
+	       if [ ! -e inta.data ]; then
+         	       mv $DALTSCR/$I1/AOTWOINT inta.data
+	       fi
+	       mv $DALTSCR/$I1/SIRIUS.RST .
+	       mv $DALTSCR/$I1/SIRIFC .
+	       
+	       mv $DALTSCR/$I1/DALTON.BAS .
+	       
+	       if [ -f $DALTSCR/$I1/h1.data ]; then
+	         mv $DALTSCR/$I1/h1.data .
+               fi
+	       
+	       if [ -f $DALTSCR/$I1/ksi.data ]; then
+	         mv $DALTSCR/$I1/ksi.data .
+               fi
+               if [ -f $DALTSCR/$I1/vxc.data ]; then
+	         mv $DALTSCR/$I1/vxc.data .
+               fi	       
+	       # the work directory is not needed now
+	       
+	       rm -r $DALTSCR/$I1/
+
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $INTERDIR/daltintf < interface.input
+		     if [ $WRITEGEOMETRY = 'YES' ]; then 
+                     grep -v "^#" DALTON.BAS |awk ' /^[A-Za-z]/ { if (NR>3 && NF==4) {
+                     i++
+                     for (j=1;j<=nclust;j++)
+                     {
+                       if (chrg>1.0e-15){
+                         nucleus++
+                         charge[nucleus]=chrg
+                               pos[nucleus]=i
+                               x[nucleus]=$2;y[nucleus]=$3;z[nucleus]=$4
+                       }
+                               if (j<nclust)  getline
+
+                     }
+                    }}
+                    { chrg=$1; nclust=$2;if (NR==4 && $1=="c") atoms=$2; if (NR==4 && $1!="c") atoms=$1 }
+                     END{
+                               print nucleus
+                               for(i=1;i<=nucleus;i++)
+                                 print pos[i],charge[i],x[i],y[i],z[i]
+                              }'  >>info.data
+		    fi
+		    cat scfener.data.dalton |awk '{print tolower($0)}' | sed 's/nan/0.0/g'>>scfener.data 
+		    rm  scfener.data.dalton
+               fi ;
+#               if [ $RMINTFILE = 'YES' ]
+#                  then
+#                     rm 
+#               fi 
+	       ;;
+       esac ;
+}
+
+runintonly ()
+{
+       case "$SCFPROG"
+          in
+            atmol)
+               if [ ! -f $I1'.intinp' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.intinp' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               time $ATMOLDIR/integw < $I1'.intinp' ;
+               echo ' &input  iprtvc=f, runsize=f &end ' > interface.input
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $INTERDIR/atmolintf < interface.input
+               fi ;
+               ls -la ED? MT? ;
+               rm ED3 ED7 ;;
+            atmol1024)
+               if [ ! -f $I1'.intinp' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.intinp' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               time $ATMNEWDIR/integw < $I1'.intinp' ;
+               echo ' &input  iprtvc=f, runsize=f &end ' > interface.input
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $INTERDIR/atm1024intf < interface.input
+               fi ;
+               ls -la ED? MT? ;
+               rm ED3 ED7 ;;
+            g94)
+               if [ ! -f $I1'.data' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.data' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               time g94 < $I1'.data' ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $SAPTDIR/g94intf < interface.input
+               fi ;
+               rm rwf.rwf ;
+               mv int.int inta.data ;;
+            g03)
+               if [ ! -f $I1'.data' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.data' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               time $GAUEXE < $I1'.data' ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $SAPTDIR/$GAUINTF < interface.input
+               fi ;
+               rm rwf.rwf ;
+               mv int.int inta.data ;;
+   	   orca)
+               if [ ! -f $I1'.data' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.data' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+               if [ $RUNINTERF = 'YES' ]
+		   then
+		   time $SAPTDIR/orcameta < $I1'.data'
+		   time $SAPTDIR/gamel1.gaussian < fort.7
+		   mv fort.7 basis.data
+		   rm fort.8 fort.9
+	       fi ;;
+            aces2)
+               mkdir aces.$$ ;
+               cd aces.$$ ;
+               cp $GENBASDIR/GENBAS . ;
+               cp ../$I1'.zmat' ZMAT ;
+               $ACES2DIR/xaces2 ;
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $INTERDIR/aces2intf < interface.input
+               fi ;
+               mv info.data .. ;
+               mv vect.data .. ;
+               mv onel.data .. ;
+               mv invsqr.smat ..;
+               mv IIII ../inta.data ;
+               mv Debug.output .. ;
+               cd ..
+               rm -rf aces.$$  ;
+               if [ $RMINTFILE = 'YES' ]
+                  then
+                     rm inta.data
+               fi ;;
+            gamess)
+              $GAMSDIR/runGAMESS\
+                    $I1 $VERNO $NNODES $GMSCRDIR $GMARCDIR $GMSPATH\
+                                    > ooo 2>&1   
+               cat ooo
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                   grep -i 'E(RHF)' $GMARCDIR/$I1.dat > scfen.aux
+                   DICTNRY=$GMSCRDIR/$I1.DAF
+                   export DICTNRY
+                   awk -f $INTERDIR/gms_awk1 ooo > interface.input
+                   awk -f $INTERDIR/gms_awk2 ooo >> interface.input
+                   echo This is the interface.input file
+                   cat interface.input
+                   echo "Starting to run gamsintf now..."
+                   $INTERDIR/gamsintf < interface.input > $I1.ino 2>&1
+                   echo Finished interface
+                   rm scfen.aux
+               fi ;
+                echo Testing the NNODES value.
+                   if [ $NNODES -ge 2 ]
+                     then
+                      mv $GMSCRDIR/inttw.data fort.1
+                      $INTERDIR/gmerge
+                      mv fort.2 inta.data
+                      rm fort.1
+                   else
+                      mv $GMSCRDIR/inttw.data inta.data
+                   fi ;
+               if [ $RMINTFILE = 'YES' ]
+                  then
+                     echo Removing the GAMESS integral file
+                     rm inta.data
+                  else
+                     echo Keeping the GAMESS integral file
+               fi ;;
+	    dalton)
+               if [ ! -f $I1'.mol' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.mol' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+	       
+	       if [ ! -f $I1'.dal' ]
+                  then
+                  echo ' '
+                  echo ----- Input file $I1'.dal' not found ----
+                  echo ... exiting ...
+                  exit
+               fi ;
+	       
+               time $DALTEXE -D -t $DALTSCR $I1 $I1
+	       
+	       cat $I1.out
+	       rm $I1.out
+	       rm -f $I1.tar.gz
+	       
+	       mv $DALTSCR/$I1/AOONEINT .
+	       mv $DALTSCR/$I1/AOTWOINT inta.data
+	       mv $DALTSCR/$I1/SIRIUS.RST .
+	       mv $DALTSCR/$I1/SIRIFC .
+	       mv $DALTSCR/$I1/DALTON.BAS .	       
+	       
+	       
+	       rm -r  $DALTSCR/$I1/
+	       
+	       echo ' &input  iprtvc=f, runsize=f &end ' > interface.input
+               if [ $RUNINTERF = 'YES' ]
+                  then
+                     time $INTERDIR/daltintf < interface.input
+               fi ;
+               ;;
+
+       esac
+}
+
+getscf ()
+{
+       if grep $1'=t' holdq4P.data > /dev/null
+          then
+               SCFPROG=$2
+          fi
+       if grep $1='.true.' holdq4P.data > /dev/null
+          then
+               SCFPROG=$2
+          fi
+}
+######################        INPUT Section       #############################
+
+NUMARGS="$#"
+
+if [ $NUMARGS -eq 0 ]
+then
+   echo ' SAPT script input ... ' 
+   echo ' SAPT [jobname] [[scfcp], [WRKDIR] '
+   echo '  -- jobname -- '
+   echo '     This keyword identifies the files to be used for input,'
+   echo '     for example, entering "job1" here will result in the   '
+   echo '     file "job1P.data" being used for the perturbation program'
+   echo '     input.  This varible is case sensitive.'
+   echo '  -- scfcp --'
+   echo '     Optional argument.  This will request a supermolecular'
+   echo '     SCF calculation using full dimer-centered basis for the'
+   echo '     dimer and monomers.'
+   echo '     If the run fails in the transformation program, it may'
+   echo '     be restarted by putting the option "gototran" in this'
+   echo '     slot and restarting.'
+   echo '  -- WRKDIR --'
+   echo '     This is the work directory for GAMESS and DALTON runs.'
+   echo '     Must be set if SAPT is to be used with GAMESS as the scf prog'
+   echo '     Optional for DALTON (current directory is assumed)'
+   echo '  -- doccsd (option deleted) --'
+   echo '     This argument has been removed.  E1_exch(CCSD) is now run'
+   echo '     as part of regular SAPT.  Namelist input parameter convamp'
+   echo '     reguests this calculation if set to T.  Perturbative'
+   echo '     calculation of E^(1i)_exch can be made at the same time'
+   echo '     by setting parms controlling these corrections to T.'
+   echo ' '
+   exit
+else
+   EXITAFTERTRAN="NO"
+   if [ $NUMARGS -ge 1 ]
+      then
+      JOBNAME=$1
+   else
+      JOBNAME='NOTGIVEN'
+   fi
+   if [ $NUMARGS -ge 2 ]
+      then
+      SCFCP=$2
+   else
+      SCFCP='NO'
+   fi
+# Input the scratch dir for Gamess or exit after tran run
+   if [ $NUMARGS -ge 3 ]
+      then
+      if [ $3 = "exitaftertran" ]; then
+        EXITAFTERTRAN="YES"
+      else  
+        WRKDIR=$3
+        echo WRKDIR ==  $WRKDIR
+      fi    
+   fi
+fi
+
+SCFCP=`echo $SCFCP | tr [A-Z] [a-z]`
+
+if [ $JOBNAME = 'NOTGIVEN' ]
+   then
+      echo No jobname entered --- exiting ...
+      exit
+fi
+
+if [ $JOBNAME = 'scfcp' ] 
+   then
+      echo SCFCP found at jobname position. Invalid name --- exiting ...  
+      exit
+fi
+
+# If PAR_MONO is set to 'T', the two monomer calculations will be done in separate, parallel subshells
+PAR_MONO=F
+
+
+###############################################################################
+
+VARSDIR=`echo $0 | sed 's#/[^/]*$#/#g'`
+
+#read the directories from vars.cfg
+. $VARSDIR/vars.cfg
+
+CLEANDIR=$MAIN_SAPT_DIR
+INTERDIR=$MAIN_SAPT_DIR
+TRANDIR=$MAIN_SAPT_DIR
+CCSDDIR=$MAIN_SAPT_DIR
+SAPTDIR=$MAIN_SAPT_DIR
+
+MOLPROPATH=$TMPDIR
+
+GAMSDIR=$MAIN_SAPT_DIR                 # location of runGAMESS script
+GMSCRDIR=$WRKDIR                       # scratch directory for GAMESS
+#echo GMSCRDIR == $GMSCRDIR
+GMARCDIR=$WRKDIR                       # archiving directory for GAMESS
+NNODES=1                               # number of nodes on which to run GAMESS
+
+# WORKDIR FOR DALTON
+# if WRKDIR is not set, set WRKDIR to current directory
+[ -z "$WRKDIR" ] && WRKDIR="."
+DALTSCR=$WRKDIR                       # scratch directory for DALTON
+DALTIN='no'
+
+if [ -x /usr/bin/banner ]; then 
+  BANNER="/usr/bin/banner"
+else
+  BANNER="echo"
+fi
+
+       $BANNER 'XXXXXXXXXX'
+       $BANNER ' S.A.P.T. '
+       $BANNER 'XXXXXXXXXX'
+       $BANNER ' '
+       $BANNER '.'$JOBNAME'.'
+# ---- echo some useful system information for reference ---
+       echo ' '
+       echo ----------  System and job control information ---------
+       echo ' '
+       echo "  date:        `date`"
+       echo "  hostname:    `hostname`"
+       echo "  system:      `uname -a`"
+       echo "  user:        `whoami`"
+       echo ' '
+       echo "  jobname:     $JOBNAME"
+       PTFILE=$JOBNAME'P.data'
+       if [ ! -f $PTFILE ]
+          then
+             echo   *** Cannot find perturbation file ***
+             echo   looking for: $PTFILE
+             exit
+       fi
+       echo "  SAPT file:   $PTFILE"
+
+       if [ $SCFCP = 'gototran' ]
+          then
+          echo "  "
+          echo "  Restarting from tran ... "
+       else
+       
+              
+# --- Make a copy of the PTFILE with no spaces and all lower case.
+       cat $PTFILE \
+            | tr '[A-Z]' '[a-z]' | tr -d " " | tr -d '\12' \
+            > holdq4P.data
+
+# --- Find out which SCFprogram we are using from the PTFILE.
+   
+#
+#               P.data   SCF
+#               variable prog
+#
+       SCFPROG='NOTSET'
+       getscf isitatm  atmol
+       getscf isitanew atmol1024
+       getscf isitg94  g94
+       getscf isitg03  g03
+       getscf isitorca orca
+       getscf isitaces aces2
+       getscf isitgams gamess
+       getscf isitcadp cadpac
+       getscf isitdalt dalton
+       getscf isitmolp molpro
+# grep also for obsolete SCF keywords and issue appropriate error messages
+       getscf isitalch alchemy
+       getscf isitg88  g88
+       getscf isitg90  g90
+       getscf isitmicr micromol
+       getscf isithndo hondo
+       getscf isitg98  g98
+
+       if [ $SCFPROG = 'alchemy' ] || [ $SCFPROG = 'g88' ] \
+          || [ $SCFPROG = 'micromol' ] || [ $SCFPROG = 'hondo' ]
+          then
+             echo " "
+             echo " The SCF program $SCFPROG is no longer supported."
+             echo " Exiting... " 
+             exit
+       fi
+
+       if [ $SCFPROG = 'g90' ]
+          then
+             echo " "
+             echo " The keyword ISITG90=T is obsolete."
+             echo " Use ISITG94=T for G94 and ISITG03=T for G03 or G98."
+             echo " Exiting... "
+             exit
+       fi
+
+       if [ $SCFPROG = 'g98' ]
+          then
+             echo " "
+             echo " The keyword ISITG98=T is obsolete."
+             echo " ISITG03=T works for both G03 and G98."
+             echo " Exiting... "
+             exit
+       fi
+
+       if [ $SCFPROG = 'NOTSET' ]
+          then
+             echo " "
+             echo " "  --- Cannot tell which SCF program to use ---
+             echo " "  --- Is it set correctly in the PT file?  ---
+             exit
+       fi
+
+       echo "  SCF program: $SCFPROG"
+
+       if [ $SCFPROG = 'aces2' ]
+          then
+          PATH=$PATH:$ACES2DIR
+       fi
+
+       if [ $SCFCP = 'scfcp' ]
+          then
+          echo "  SCF CP:      requested"
+       else
+          echo "  SCF CP:      *not* requested"
+       fi
+
+# ---- find transformation type --- must be monomer or dimer (default)
+       TRANTYPE='dimer'
+       if grep dimer=f holdq4P.data > /dev/null
+          then
+               TRANTYPE='mono'
+          fi
+       if grep dimer=.false. holdq4P.data > /dev/null
+          then
+               TRANTYPE='mono'
+          fi
+       echo "  tran type:   $TRANTYPE"
+       echo " "
+       echo " "
+
+       if [ $TRANTYPE = 'mono' ] &&\
+         ([ $SCFPROG = 'molpro' ] || [ $SCFPROG = 'g03' ])
+         then
+           if (!  grep blkmb=f holdq4P.data > /dev/null ) \
+           && (!  grep blkmb=.false. holdq4P.data > /dev/null )
+           then
+             echo ' You must set BLKMB=.FALSE. and specify basis tags '
+             echo ' for a MC+BS run with MOLPRO or GAUSSIAN! '
+             exit
+           fi
+         fi
+
+       DODISP='no'
+       if grep dconvamp=t holdq4P.data > /dev/null
+          then
+               DODISP='yes'
+          fi
+
+       if grep dconvamp=.true. holdq4P.data > /dev/null
+          then
+               DODISP='yes'
+          fi
+
+       if [ $DODISP = 'yes' ]; then
+         echo "E(2)disp(CCD+ST(CCD)) calculation requested"
+         echo "Other SAPT corrections will be skipped"
+# a few consistency checks
+         if (!  grep ccd=t holdq4P.data > /dev/null ) \
+           && (!  grep ccd=.true. holdq4P.data > /dev/null )
+           then
+             DODISP='error'
+           fi
+         if (!  grep ccsd=f holdq4P.data > /dev/null ) \
+           && (!  grep ccsd=.false. holdq4P.data > /dev/null )
+           then
+             DODISP='error'
+           fi
+         if (!  grep wrteach=t holdq4P.data > /dev/null ) \
+           && (!  grep wrteach=.true. holdq4P.data > /dev/null )
+           then
+             DODISP='error'
+           fi
+         if [ $DODISP = 'error' ]; then
+           echo "For an E(2)disp(CCD+ST(CCD)) run, the CCINP namelist must"
+           echo "contain CCD=.TRUE., CCSD=.FALSE., AND WRTEACH=.TRUE."
+           echo "Exiting... "
+           exit
+           fi
+         if ( grep frozen=t holdq4P.data > /dev/null ) \
+           || ( grep frozen=.true. holdq4P.data > /dev/null )
+           then
+             DODISP='error'
+           fi
+         if [ $DODISP = 'error' ]; then
+           echo "Error: frozen core not implemented in E(2)disp(CCD+ST(CCD))"
+           echo "Exiting... "
+           exit
+         fi
+       fi
+
+# check if E(30)disp or E(30)exch-disp have been requested
+# if not, we may delete the AO integral file after CC
+       THIRDO='no'
+       if grep e300d=t holdq4P.data > /dev/null
+          then
+               THIRDO='yes'
+          fi
+       if grep e300d=.true. holdq4P.data > /dev/null
+          then
+               THIRDO='yes'
+          fi
+       if grep e30xd=t holdq4P.data > /dev/null
+          then
+               THIRDO='yes'
+          fi
+       if grep e30xd=.true. holdq4P.data > /dev/null
+          then
+               THIRDO='yes'
+          fi
+       if grep e30xdsdq=t holdq4P.data > /dev/null
+          then
+               THIRDO='yes'
+          fi
+       if grep e30xdsdq=.true. holdq4P.data > /dev/null
+          then
+               THIRDO='yes'
+          fi
+       if grep directe3=f holdq4P.data > /dev/null
+          then
+               THIRDO='no'
+          fi
+       if grep directe3=.false. holdq4P.data > /dev/null
+          then
+               THIRDO='no'
+          fi
+
+
+       REGUL='no'
+       if grep rind=t holdq4P.data > /dev/null
+          then
+               REGUL='yes'
+          fi
+       if grep rind=.true. holdq4P.data > /dev/null
+          then
+               REGUL='yes'
+          fi
+       if grep rind0=t holdq4P.data > /dev/null
+          then
+               REGUL='yes'
+          fi
+       if grep rind0=.true. holdq4P.data > /dev/null
+          then
+               REGUL='yes'
+          fi
+       if grep rind0r=t holdq4P.data > /dev/null
+          then
+               REGUL='yes'
+          fi
+       if grep rind0r=.true. holdq4P.data > /dev/null
+          then
+               REGUL='yes'
+          fi
+       if grep re3=t holdq4P.data > /dev/null
+          then
+               REGUL='yes'
+          fi
+       if grep re3=.true. holdq4P.data > /dev/null
+          then
+               REGUL='yes'
+          fi
+       if [ $REGUL = 'yes' ]; then
+           echo "Regularized SAPT corrections have been requested."
+           echo "Run the regSAPT script instead."
+           echo "Email patkowsk@physics.udel.edu for more information."
+           echo "Exiting... "
+           exit
+       fi
+       
+        SAPTDFT='no'
+        if grep "&saptdft" holdq4P.data > /dev/null
+          then
+               SAPTDFT='yes'
+          fi
+       
+       rm holdq4P.data
+             
+# ---  If using atmol, monoplus method, and not doing an scfcp
+#      calculation, make sure that the A.intinp file does *not*
+#      have a BYPASS TWO statement.
+#
+       if [ $SCFPROG = 'atmol' ] || [ $SCFPROG = 'atmol1024' ]
+          then
+            if [ $SCFCP != 'scfcp' ]
+               then
+            if grep -i 'bypass two' $JOBNAME'A.intinp' > /dev/null
+               then
+                  echo   BYPASS TWO directive must be removed from the
+                  echo   $JOBNAME'A.intinp file.    exiting ...'
+                  exit
+            fi 
+            if grep -i 'bypass 2' $JOBNAME'A.intinp' > /dev/null
+               then
+                  echo   BYPASS TWO directive must be removed from the
+                  echo   $JOBNAME'A.intinp file.    exiting ...'
+                  exit
+            fi 
+               fi
+          fi
+
+#      ## rm some files ##
+       echo Cleaning directory now. 
+       $CLEANDIR/Clean
+#      ###################
+
+#      ## UNIX needs space    ###
+#      # Get -data and -memory  #
+#      # storage space.         #
+#      ##########################
+#      ulimit -d 228860
+#      ulimit -m unlimited
+#      ulimit -s unlimited
+#      ##########################
+
+####################### BEGIN CALCULATIONS ######################
+   
+#         ---- IF monomer transformation is being done ----
+#         ---- Begin by doing the monomer A and B SCF  ----
+#         ---- calculations for eigenvalues and        ----
+#         ---- eigenvectors                            ----
+if [ $SCFPROG  = 'molpro' ]
+then
+        I1=$JOBNAME
+       echo "       -----------------------------------------------"
+       echo "       ---------------       Molpro  Run   -----------"
+       echo "       -----------------------------------------------"
+       runscf
+
+# The scfener.data file is now generated by the MOLPRO interface
+else
+
+if [ $TRANTYPE = 'mono' ]
+    then
+    
+    echo ' &input  iprtvc=f, runsize=t &end ' > interface.input
+    WRITEGEOMETRY="YES"
+    
+    mkdir monomerA
+    cp $(ls -I '*log' -I '*out' -I 'monomer*' -I '*\**') monomerA
+    mkdir monomerB
+    cp $(ls -I '*log' -I '*out' -I 'monomer*' -I '*\**') monomerB
+    
+    (
+       cd monomerA
+       
+       I1=$JOBNAME'MA'
+       RMINTFILE='YES'
+       RUNINTERF='YES'
+       
+       if [ -f auxilA.data ]; then
+          cp -f auxilA.data auxil.data
+       fi
+       
+       echo " " >> MONOA.out
+       echo "       -----------------------------------------------"  >> MONOA.out   
+       echo "       ------------ Monomer A in its MC+BS -----------"  >> MONOA.out
+       echo "       -----------------------------------------------"  >> MONOA.out
+       echo " " >> MONOA.out
+       runscf >> MONOA.out 2>&1
+       
+       mv basis.data basisa.data
+       mv vect.data vecta.data
+       mv onel.data onela.data
+       mv info.data infoa.data
+       if [ $DALTIN = 'yes' ]; then
+         mv h1.data h1A.data
+	 mv vxc.data vxcA.data
+         touch h2A.data
+       fi
+       
+       cd ..
+    ) &
+    
+    if [ ! "$PAR_MONO" = "T" ]; then
+	wait
+    fi
+    
+    (
+       cd monomerB
+       
+       I1=$JOBNAME'MB'
+       RMINTFILE='YES'
+       RUNINTERF='YES'
+       
+       if [ -f auxilB.data ]; then
+           cp -f auxilB.data auxil.data
+       fi
+
+       echo " " >> MONOB.out
+       echo "       -----------------------------------------------"  >> MONOB.out
+       echo "       ------------ Monomer B in its MC+BS -----------"  >> MONOB.out
+       echo "       -----------------------------------------------"  >> MONOB.out
+       echo " " >> MONOB.out
+       runscf >> MONOB.out 2>&1
+       
+       mv basis.data basisb.data
+       mv vect.data vectb.data
+       mv onel.data onelb.data
+       mv info.data infob.data
+       if [ $DALTIN = 'yes' ]; then
+         mv h1.data h1B.data
+	 mv vxc.data vxcB.data	 
+         touch h2B.data
+       fi
+       
+       cd ..
+    ) &
+    
+    wait
+    
+    mv monomerA/* .
+    mv monomerB/* .
+    rmdir monomerA
+    rmdir monomerB
+    cat MONOA.out
+    cat MONOB.out
+    
+    rm scfener.data
+fi
+
+    rm inta.data
+#         ---- DO Dimer calculation if required ---
+if [ $SCFCP = 'scfcp' ]  
+   then
+      I1=$JOBNAME
+      RMINTFILE='NO'
+      if [ $SCFPROG = 'gamess' ]
+         then
+           RMINTFILE='YES'
+      fi
+      RUNINTERF='YES'
+
+
+       echo ' &input  iprtvc=f, runsize=t &end ' > interface.input
+       if [ -f scfener.data ]
+          then rm scfener.data
+       fi
+
+       WRITEGEOMETRY="YES" # Necessary for Dalton interface
+       echo " "
+       echo "       -----------------------------------------------"    
+       echo "       --------------     Dimer Run     --------------"    
+       echo "       -----------------------------------------------"    
+       echo " "
+       runscf
+       if [ $SCFPROG = 'gamess' ]
+          then
+              rm vect.data onel.data info.data
+       fi
+
+fi
+
+if [ $TRANTYPE = 'dimer' -o $SCFCP = 'scfcp' ]
+   then
+      I1=$JOBNAME'A'
+      RMINTFILE='NO'
+      if [ $SCFPROG = 'gamess' ]
+         then
+           RMINTFILE='YES'
+      fi
+      RUNINTERF='YES'
+
+       if [ $TRANTYPE = 'dimer' ]
+          then
+             echo ' &input  iprtvc=f, runsize=t &end ' > interface.input
+	     WRITEGEOMETRY="YES"
+          else
+             echo ' &input  iprtvc=f, runsize=f &end ' > interface.input
+	     WRITEGEOMETRY="NO"
+       fi
+
+       echo " "
+       echo "       -----------------------------------------------"    
+       echo "       -------------- Monomer A - DCBS  --------------"    
+       echo "       --- if dimer was done do not recompute 2-el ---"
+       echo "       -----------------------------------------------"    
+       echo " "
+       runscf
+
+       cp basis.data basisa.dimer.data
+
+       if [ $TRANTYPE = 'dimer' ]
+          then
+	  mv basis.data basisa.data
+          mv vect.data vecta.data
+          mv onel.data onela.data
+          mv info.data infoa.data
+       else
+          cat info.data >> infoa.data
+          mv onel.data onela.data
+       fi
+       
+       if [ $DALTIN = 'yes' ]; then
+         mv h1.data h1A.data
+	 mv vxc.data vxcA.data
+         touch h2A.data
+       fi
+          
+      I1=$JOBNAME'B'
+      RMINTFILE='NO'   # even for Gamess, keep integral file this time
+      RUNINTERF='YES'
+
+       echo " "
+       echo "       -----------------------------------------------"    
+       echo "       -------------- Monomer B - DCBS  --------------"    
+       echo "       -----------  do not recompute 2-el  -----------"
+       echo "       -----------------------------------------------"    
+       echo " "
+       runscf
+
+       if [ $TRANTYPE = 'dimer' ]
+          then
+	  mv basis.data basisb.data
+          mv vect.data vectb.data
+          mv onel.data onelb.data
+          mv info.data infob.data
+       else
+          cat info.data >> infob.data
+          mv onel.data onelb.data
+       fi
+       
+       if [ $DALTIN = 'yes' ]; then
+         mv h1.data h1B.data
+	 mv vxc.data vxcB.data
+         touch h2B.data
+       fi
+       
+   else
+#          ---------- Mono transformation and no scfcp case
+      I1=$JOBNAME'A'
+      RMINTFILE='NO'
+      if [ $SCFPROG = 'gamess' ]
+         then
+           RMINTFILE='YES'
+      fi
+      RUNINTERF='YES'
+
+       echo " "
+       echo "       -----------------------------------------------"
+       echo "       -------------- Monomer A - DCBS  --------------"
+       echo "       -----------  compute 1-el and 2-el  -----------"
+       echo "       -----------------------------------------------"
+       echo " "
+
+       echo ' &input  iprtvc=f, runsize=f &end ' > interface.input
+
+       runintonly
+
+       cp basis.data basisa.dimer.data
+       cat info.data >> infoa.data
+       mv onel.data onela.data
+
+      I1=$JOBNAME'B'
+      RMINTFILE='NO'   # even for Gamess, keep integral file this time
+      RUNINTERF='YES'
+
+       echo " "
+       echo "       -----------------------------------------------"
+       echo "       -------------- Monomer B - DCBS  --------------"
+       echo "       -----------    compute 1-el only    -----------"
+       echo "       -----------------------------------------------"
+       echo " "
+
+       echo ' &input  iprtvc=f, runsize=f &end ' > interface.input
+
+       runintonly
+
+       cat info.data >> infob.data
+       mv onel.data onelb.data
+fi
+fi
+
+fi
+echo '
+###################################################################
+####                 Run Transformation program.               ####
+###################################################################
+'
+       AOINTS=inta.data
+       export AOINTS
+       cp $PTFILE file5.dat
+       cat file5.dat
+       if [ -f success ]
+          then rm success
+       fi
+       
+       if [ -f $JOBNAME.dispinp ]; then
+	   echo 'This appears to be a COM asymptotic calculation.'
+	   TRANARG='AB'
+       else
+	   TRANARG=''
+       fi
+       
+       rm docc
+       time $TRANDIR/tran $TRANARG
+
+       ls -la
+       if [ ! -f success ]
+       then
+          exit
+       fi
+       rm success
+       
+       
+       if [ $SCFPROG != 'molpro' ]
+       then
+          rm inta.data
+       fi
+
+       if [ $EXITAFTERTRAN = "YES" ]; then
+          exit
+       fi
+
+       
+       docc="yes"
+       if [ -f docc ]; then
+         iter=`cat docc`
+	 if [ $iter -eq 0 ]; then
+	   docc="no"
+	   echo "  ###################################################################"
+	   echo "  ####                 Coupled Cluster not needed.               ####"
+	   echo "  ###################################################################"
+	 fi
+       fi
+
+if [ $docc != 'no' ]; then 
+
+  echo '
+  ###################################################################
+  ####                 Run Coupled Cluster program.              ####
+  ###################################################################
+  '
+       time $MAIN_SAPT_DIR/int <file5.dat
+       time $MAIN_SAPT_DIR/sort <file5.dat
+       time $CCSDDIR/ccsdt
+       
+       ls -la
+       rm -f i*_*
+       rm -f o*__*
+       rm -f ccsort*
+       rm -f ccloc*
+
+       if [ $DODISP = 'yes' ]
+         then
+           time $MAIN_SAPT_DIR/e2disp
+         fi
+fi 
+
+
+
+
+if [ ! -f "********** SAPT called from dfSAPT(DFT) is running **********" ]
+    then
+
+    if [ $SAPTDFT != "no" ]; then
+	echo '
+###################################################################
+####                  Run SAPT(DFT) CKS program.               ####
+###################################################################'
+       
+       
+	rm -f final2eab
+	ln f2e.000.001 final2eab
+	time $SAPTDIR/cks <file5.dat|tee -a ooo.tmp
+	rm final2eab
+	rm fort.81
+	ls -la
+    fi
+ 
+    echo '
+###################################################################
+####                  Run Perturbation program.                ####
+###################################################################
+'
+    if [ $THIRDO != "yes" ]; then
+	rm MT3
+    fi
+    if [ $SAPTDFT != "no" ]; then
+	
+	time $SAPTDIR/sapt.x|tee -a ooo.tmp
+    else
+	
+	time $SAPTDIR/sapt.x
+    fi
+    ls -la
+    echo ' '
+#       rm tmp
+    if [ -f MT3 ]
+	then
+	rm MT3
+    fi
+    if [ -f inta.data ]
+	then
+	rm inta.data
+    fi
+    
+    if [ $SAPTDFT != "no" ]; then
+# Create summary table
+       $SAPTDIR/mergesaptdft ooo.tmp
+       rm ooo.tmp
+       echo ' '
+    fi
+
+fi 
+
+echo Ending of SAPT script at: `date`
+if [ -f "********** SAPT called from dfSAPT(DFT) is running **********" ]
+    then
+    echo
+    rm "********** SAPT called from dfSAPT(DFT) is running **********"
+fi
+
+exit

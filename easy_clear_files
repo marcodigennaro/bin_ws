@@ -1,0 +1,15 @@
+#!/bin/bash
+
+pwd
+rm -r wrk
+rm log_EA_L1.log out_L1.log state db
+rm *lmps* 
+
+#cp /home/mdi0316/Inputfiles/EASY/task.bat .
+#cp /home/mdi0316/Inputfiles/EASY/config.easy .
+
+echo "127.0.0.1 mdi0316" `pwd` >  ~/easy_nodes_list
+echo "127.0.0.1 mdi0316" `pwd` >> ~/easy_nodes_list
+echo "127.0.0.1 mdi0316" `pwd` >> ~/easy_nodes_list
+echo "127.0.0.1 mdi0316" `pwd` >> ~/easy_nodes_list
+

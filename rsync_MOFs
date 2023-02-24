@@ -1,0 +1,9 @@
+#!/usr/bin/sh
+
+src='/data/mdi0316/WORK/MOFS/'
+dest='/storage/mdi0316/'
+
+## MOFs 
+rsync -ravz --update --exclude LOGS --exclude slurm* --exclude QML9 --exclude ML /data/mdi0316/WORK/MOFS/ /storage/mdi0316/MOFS
+rsync -ravz --update --exclude LOGS --exclude slurm* --exclude cv* /data/mdi0316/WORK/MOFS/ML/ /storage/mdi0316/MOFS/ML
+## MOFs 

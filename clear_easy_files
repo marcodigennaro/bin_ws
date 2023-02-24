@@ -1,0 +1,16 @@
+#!/bin/bash
+
+pwd
+rm -r wrk
+rm EAlog* lmps* out_L1.log state db solid.data angle.dump bonds.dump log.lammps run_lammps.py  
+rm out.run_lmps err.run_lmps
+rm *lmps 
+
+#cp /home/mdi0316/Inputfiles/EASY/task.bat .
+#cp /home/mdi0316/Inputfiles/EASY/config.easy .
+
+echo "127.0.0.1 mdi0316" `pwd` >  ~/easy_nodes_list
+echo "127.0.0.1 mdi0316" `pwd` >> ~/easy_nodes_list
+echo "127.0.0.1 mdi0316" `pwd` >> ~/easy_nodes_list
+echo "127.0.0.1 mdi0316" `pwd` >> ~/easy_nodes_list
+

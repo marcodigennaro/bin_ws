@@ -1,0 +1,9 @@
+mol representation Points 5.000000
+color Display Background white
+color ColorID 0 name 1
+color ColorID 4 name 2
+color ColorID 1 name 3
+display projection Orthographic
+pbc box
+rotate y by 90
+rotate x by 45

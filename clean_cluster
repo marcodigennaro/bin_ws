@@ -1,0 +1,43 @@
+#!/home/mdi0316/anaconda3/bin/python
+
+import os
+import sys
+import subprocess as sp
+import paramiko
+scripts_dir = '/home/mdi0316/FUNCTIONS'
+sys.path.insert(0, scripts_dir)
+from Functions import print_tab, running_jobs, find_last_log
+ 
+run_ids, run_labels = running_jobs()
+
+#print(run_ids)
+#client = paramiko.SSHClient()
+#client.load_system_host_keys()
+#client.connect('mdi0316@node001')
+#stdin, stdout, stderr = client.exec_command('ls -l')
+
+
+running_list = [ '/tmp/mdi0316_slurm_{}'.format(item) for item in run_ids ]
+
+for node in [ '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015' ]:
+
+   ## read all tmp_folders_on_node
+   cmd = "ssh node{} 'ls /tmp/mdi0316_slurm_*'".format(node)
+   process = sp.Popen( cmd, stdout=sp.PIPE, shell =True, encoding='utf8')
+   out, err = process.communicate()
+   remote_list = [ ff.replace(':','') for ff in  out.split('\n') if ff.startswith('/tmp') ]
+   delete_list = [ ff for ff in remote_list if ff not in running_list ]
+   for dd_ff in delete_list:
+       print('Node: {}, removing {}'.format( node, dd_ff))
+       #cmd = "cat ~/rm_tmp_folders.sh < {} | ssh -tt node{}".format(dd_ff, node)
+       cmd = "ssh node{} 'rm -rf {}'".format(node, dd_ff)
+       sp.call( cmd, shell =True)
+       process = sp.Popen( cmd, stdout=sp.PIPE, shell =True, encoding='utf8')
+      
+   ## clear all semaphores on node
+   cmd = "ssh node{} ~/bin/clean_semaphores.sh".format(node)
+   sp.call( cmd, shell =True)
+      
+   ## clear all semaphores on node
+   cmd = "ssh node{} ~/bin/rm_semaphores.sh".format(node)
+   sp.call( cmd, shell =True)

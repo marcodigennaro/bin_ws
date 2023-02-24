@@ -1,0 +1,30 @@
+#/usr/bin/sh
+
+while true; do 
+
+list_of_jobs=`squeue -u \`whoami\` -o "%.8i %.9P %.70j %.8T %.10M %.9l %.6D %R"|grep $1`
+pen_hiq=`squeue -u \`whoami\` -o "%.8i %.9P %.70j %.8T %.10M %.9l %.6D %R"|grep "PENDING"|grep "nodeshiq"|wc -l`
+pen_loq=`squeue -u \`whoami\` -o "%.8i %.9P %.70j %.8T %.10M %.9l %.6D %R"|grep "PENDING"|grep "nodesloq"|wc -l`
+run_hiq=`squeue -u \`whoami\` -o "%.8i %.9P %.70j %.8T %.10M %.9l %.6D %R"|grep "RUNNING"|grep "nodeshiq"|wc -l`
+run_loq=`squeue -u \`whoami\` -o "%.8i %.9P %.70j %.8T %.10M %.9l %.6D %R"|grep "RUNNING"|grep "nodesloq"|wc -l`
+
+#echo "list of jobs:"
+#echo "$list_of_jobs" | sed 's/(Resources)//g; s/(Priority)//g; s/365-00:00:00      /      365      /g'
+#all_jobs=`echo "$list_of_jobs" | wc -l `
+#echo "Total running = $(( $all_jobs - 1 ))"
+
+tot_hiq=$(( $pen_hiq + $run_hiq ))
+tot_loq=$(( $pen_loq + $run_loq ))
+tot_pen=$(( $pen_hiq + $pen_loq ))
+tot_run=$(( $run_hiq + $run_loq ))
+
+echo "================================="
+echo "      PENDING | RUNNING | TOTAL"
+printf 'hiq      %04d |    %04d |  %04d \n' $pen_hiq $run_hiq $tot_hiq
+printf 'loq      %04d |    %04d |  %04d \n' $pen_loq $run_loq $tot_loq
+printf 'tot      %04d |    %04d |  %04d \n' $tot_pen $tot_run $(( $tot_hiq + $tot_loq ))
+echo " " `date` 
+echo "  going to sleep for ${1} secs  "
+echo "---------------------------------"
+sleep $1
+done
